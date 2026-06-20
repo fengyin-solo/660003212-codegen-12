@@ -1,6 +1,21 @@
 <template>
   <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
-    <h3 class="text-sm font-bold text-slate-400 mb-3">ADMET 性质预测</h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-bold text-slate-400">ADMET 性质预测</h3>
+      <button
+        v-if="store.currentMolecule"
+        @click="store.addToCandidates(store.currentMolecule!)"
+        :disabled="store.isCandidate(store.currentMolecule!.id)"
+        :class="[
+          'px-2 py-1 rounded text-xs font-medium transition-all',
+          store.isCandidate(store.currentMolecule!.id)
+            ? 'bg-yellow-600/30 text-yellow-400 cursor-not-allowed border border-yellow-600/50'
+            : 'bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-500'
+        ]"
+      >
+        {{ store.isCandidate(store.currentMolecule!.id) ? '⭐ 已加入' : '加入候选' }}
+      </button>
+    </div>
     <div v-if="store.admet" class="space-y-3">
       <div class="grid grid-cols-2 gap-2 text-sm">
         <div class="bg-slate-900 rounded p-2">

@@ -2,9 +2,24 @@
   <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
     <div class="flex items-center justify-between mb-3">
       <h3 class="text-sm font-bold text-slate-400">3D 分子结构</h3>
-      <div v-if="store.currentMolecule" class="text-right">
-        <div class="text-lg font-bold text-cyan-400">{{ store.currentMolecule.name }}</div>
-        <div class="text-xs text-slate-500">{{ store.currentMolecule.formula }} · MW {{ store.currentMolecule.mw }}</div>
+      <div class="flex items-center gap-3">
+        <div v-if="store.currentMolecule" class="text-right">
+          <div class="text-lg font-bold text-cyan-400">{{ store.currentMolecule.name }}</div>
+          <div class="text-xs text-slate-500">{{ store.currentMolecule.formula }} · MW {{ store.currentMolecule.mw }}</div>
+        </div>
+        <button
+          v-if="store.currentMolecule"
+          @click="store.addToCandidates(store.currentMolecule!)"
+          :disabled="store.isCandidate(store.currentMolecule!.id)"
+          :class="[
+            'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+            store.isCandidate(store.currentMolecule!.id)
+              ? 'bg-yellow-600/30 text-yellow-400 cursor-not-allowed border border-yellow-600/50'
+              : 'bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-500'
+          ]"
+        >
+          <span>{{ store.isCandidate(store.currentMolecule!.id) ? '⭐ 已加入' : '加入候选清单' }}</span>
+        </button>
       </div>
     </div>
     <div ref="containerRef" class="w-full h-96 bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-center">

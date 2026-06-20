@@ -45,3 +45,24 @@ export interface MoleculeData {
   atoms: Atom3D[]
   bonds: Bond3D[]
 }
+
+export type ScreeningVerdict = '推荐' | '待评估' | '不推荐' | '待定'
+
+export interface CandidateItem {
+  molecule: MoleculeData
+  admet: ADMETProps
+  verdict: ScreeningVerdict
+  addedAt: number
+  notes: string
+  priority: number
+}
+
+export interface ScreeningCriteria {
+  maxMw: number
+  maxLogP: number
+  minLogS: number
+  minBioavailability: number
+  allowToxicity: string[]
+  requireRuleOfFive: boolean
+  maxViolations: number
+}

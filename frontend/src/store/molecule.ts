@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { MoleculeData, ADMETProps } from '../types'
+import type { MoleculeData, ADMETProps, CandidateItem, ScreeningVerdict, ScreeningCriteria } from '../types'
 
 const ATOM_COLORS: Record<string, string> = {
   C: '#6b7280', N: '#3b82f6', O: '#ef4444', S: '#eab308',
@@ -97,6 +97,44 @@ export function computeADMET(mol: { mw: number; logP: number; formula: string })
   }
 }
 
+const DEFAULT_CRITERIA: ScreeningCriteria = {
+  maxMw: 500,
+  maxLogP: 5,
+  minLogS: -5,
+  minBioavailability: 30,
+  allowToxicity: ['低毒性', '中等毒性'],
+  requireRuleOfFive: true,
+  maxViolations: 1
+}
+
+function autoScreen(admet: ADMETProps, criteria: ScreeningCriteria): ScreeningVerdict {
+  let score = 0
+
+  if (admet.logP <= criteria.maxLogP && admet.logP >= 0) score += 1
+  else if (admet.logP > criteria.maxLogP) score -= 1
+
+  if (admet.logS >= criteria.minLogS) score += 1
+  else score -= 1
+
+  if (admet.bioavailability >= criteria.minBioavailability) score += 1
+  else if (admet.bioavailability < 10) score -= 1
+
+  if (criteria.allowToxicity.some(t => admet.toxicity.includes(t))) score += 1
+  else if (admet.toxicity.includes('高')) score -= 2
+
+  if (criteria.requireRuleOfFive) {
+    if (admet.ruleOfFive && admet.violations <= criteria.maxViolations) score += 1
+    else if (admet.violations > criteria.maxViolations) score -= 1
+  }
+
+  if (admet.metabolicStability === '稳定') score += 1
+  else if (admet.metabolicStability === '不稳定') score -= 1
+
+  if (score >= 3) return '推荐'
+  if (score >= 0) return '待评估'
+  return '不推荐'
+}
+
 export const useMoleculeStore = defineStore('molecule', () => {
   const molecules = ref<MoleculeData[]>([])
   const currentMolecule = ref<MoleculeData | null>(null)
@@ -104,12 +142,38 @@ export const useMoleculeStore = defineStore('molecule', () => {
   const searchQuery = ref('')
   const searchResults = ref<MoleculeData[]>([])
   const isLoading = ref(false)
+  const candidates = ref<CandidateItem[]>([])
+  const screeningCriteria = ref<ScreeningCriteria>({ ...DEFAULT_CRITERIA })
+  const showCandidatePanel = ref(false)
 
   const filteredMolecules = computed(() => {
     if (!searchQuery.value) return molecules.value
     const q = searchQuery.value.toLowerCase()
     return molecules.value.filter(m => m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.smiles.toLowerCase().includes(q))
   })
+
+  const candidateIds = computed(() => new Set(candidates.value.map(c => c.molecule.id)))
+
+  const candidatesByVerdict = computed(() => {
+    const groups: Record<string, CandidateItem[]> = {
+      '推荐': [],
+      '待评估': [],
+      '不推荐': [],
+      '待定': []
+    }
+    candidates.value.forEach(c => {
+      if (!groups[c.verdict]) groups[c.verdict] = []
+      groups[c.verdict].push(c)
+    })
+    return groups
+  })
+
+  const candidateStats = computed(() => ({
+    total: candidates.value.length,
+    recommended: candidates.value.filter(c => c.verdict === '推荐').length,
+    evaluating: candidates.value.filter(c => c.verdict === '待评估').length,
+    rejected: candidates.value.filter(c => c.verdict === '不推荐').length
+  }))
 
   function loadMolecules() {
     molecules.value = MOCK_MOLECULES.map(m => {
@@ -147,9 +211,65 @@ export const useMoleculeStore = defineStore('molecule', () => {
       .slice(0, 5)
   })
 
+  function addToCandidates(mol: MoleculeData) {
+    if (candidateIds.value.has(mol.id)) return
+    const molAdmet = computeADMET({ mw: mol.mw, logP: mol.logP, formula: mol.formula })
+    const verdict = autoScreen(molAdmet, screeningCriteria.value)
+    candidates.value.push({
+      molecule: mol,
+      admet: molAdmet,
+      verdict,
+      addedAt: Date.now(),
+      notes: '',
+      priority: 3
+    })
+  }
+
+  function removeFromCandidates(molId: number) {
+    const idx = candidates.value.findIndex(c => c.molecule.id === molId)
+    if (idx !== -1) candidates.value.splice(idx, 1)
+  }
+
+  function isCandidate(molId: number): boolean {
+    return candidateIds.value.has(molId)
+  }
+
+  function updateVerdict(molId: number, verdict: ScreeningVerdict) {
+    const item = candidates.value.find(c => c.molecule.id === molId)
+    if (item) item.verdict = verdict
+  }
+
+  function updateNotes(molId: number, notes: string) {
+    const item = candidates.value.find(c => c.molecule.id === molId)
+    if (item) item.notes = notes
+  }
+
+  function updatePriority(molId: number, priority: number) {
+    const item = candidates.value.find(c => c.molecule.id === molId)
+    if (item) item.priority = priority
+  }
+
+  function clearCandidates() {
+    candidates.value = []
+  }
+
+  function rescreenAll() {
+    candidates.value.forEach(c => {
+      c.verdict = autoScreen(c.admet, screeningCriteria.value)
+    })
+  }
+
+  function toggleCandidatePanel() {
+    showCandidatePanel.value = !showCandidatePanel.value
+  }
+
   return {
     molecules, currentMolecule, admet, searchQuery, searchResults, isLoading,
-    filteredMolecules, similarMolecules,
-    loadMolecules, selectMolecule, searchMolecules
+    candidates, screeningCriteria, showCandidatePanel,
+    filteredMolecules, candidateIds, candidatesByVerdict, candidateStats, similarMolecules,
+    loadMolecules, selectMolecule, searchMolecules,
+    addToCandidates, removeFromCandidates, isCandidate,
+    updateVerdict, updateNotes, updatePriority,
+    clearCandidates, rescreenAll, toggleCandidatePanel
   }
 })
