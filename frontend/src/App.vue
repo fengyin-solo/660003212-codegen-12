@@ -41,8 +41,8 @@
       <Transition name="slide-up">
         <div
           v-if="store.showCandidatePanel"
-          class="fixed inset-x-0 bottom-0 h-4/5 z-50 shadow-2xl border-t border-slate-700"
-          style="height: 80vh;"
+          class="fixed inset-x-0 bottom-0 z-50 shadow-2xl border-t border-slate-700 bg-slate-800 rounded-t-xl"
+          style="height: 80vh; max-height: 80vh;"
         >
           <CandidateList />
         </div>
